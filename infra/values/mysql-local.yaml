@@ -1,0 +1,6 @@
+auth:
+  rootPassword: rootpw
+  database: app
+primary:
+  persistence:
+    storageClass: local-path 

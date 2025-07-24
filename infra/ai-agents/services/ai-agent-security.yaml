@@ -1,0 +1,196 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-security
+  namespace: ai-agents
+  labels:
+    app: ai-agent-security
+    app.kubernetes.io/name: ai-agent-security
+    app.kubernetes.io/part-of: medinovai
+    version: v1.0.0
+spec:
+  replicas: 6
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ai-agent-security
+  template:
+    metadata:
+      labels:
+        app: ai-agent-security
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ai-agent-security
+      containers:
+      - name: ai-agent-security
+        image: medinovai/ai-agent-security:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - name: http-api
+          containerPort: 8080
+          protocol: TCP
+        - name: grpc-api
+          containerPort: 9090
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SERVICE_NAME
+          value: "ai-agent-security"
+        - name: AGENT_TYPE
+          value: "security"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: METRICS_PORT
+          value: "9091"
+        - name: HEALTH_PORT
+          value: "8081"
+        - name: GRPC_PORT
+          value: "9090"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: MAX_CONCURRENT_SCANS
+          value: "15"
+        - name: SCAN_TIMEOUT
+          value: "3600"
+        - name: VULNERABILITY_THRESHOLD
+          value: "medium"
+        - name: SECURITY_TOOLS
+          value: "semgrep,bandit,sonarqube,trivy,clair,anchore"
+        - name: ENABLE_SAST
+          value: "true"
+        - name: ENABLE_DAST
+          value: "true"
+        - name: ENABLE_CONTAINER_SCAN
+          value: "true"
+        - name: ENABLE_DEPENDENCY_SCAN
+          value: "true"
+        - name: ENABLE_SECRET_SCAN
+          value: "true"
+        - name: ENABLE_COMPLIANCE_CHECK
+          value: "true"
+        - name: COMPLIANCE_FRAMEWORKS
+          value: "owasp,cis,hipaa,gdpr,sox"
+        - name: ENABLE_THREAT_MODELING
+          value: "true"
+        - name: ENABLE_PENETRATION_TESTING
+          value: "true"
+        - name: SECURITY_REPORT_FORMAT
+          value: "sarif,json,html,pdf"
+        - name: AUTO_REMEDIATION_ENABLED
+          value: "true"
+        - name: SECURITY_ALERT_CHANNELS
+          value: "slack,email,webhook"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: security-reports
+          mountPath: /tmp/security-reports
+          readOnly: false
+        - name: security-cache
+          mountPath: /tmp/security-cache
+          readOnly: false
+        - name: security-config
+          mountPath: /etc/security/config
+          readOnly: true
+      volumes:
+      - name: security-reports
+        emptyDir: {}
+      - name: security-cache
+        emptyDir: {}
+      - name: security-config
+        configMap:
+          name: security-agent-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-security
+  namespace: ai-agents
+  labels:
+    app: ai-agent-security
+    app.kubernetes.io/name: ai-agent-security
+    app.kubernetes.io/part-of: medinovai
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9091"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc-api
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  selector:
+    app: ai-agent-security
+  sessionAffinity: None 

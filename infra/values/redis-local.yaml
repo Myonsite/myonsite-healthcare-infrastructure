@@ -1,0 +1,4 @@
+architecture: standalone
+master:
+  persistence:
+    storageClass: local-path 

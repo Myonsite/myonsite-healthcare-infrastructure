@@ -1,0 +1,167 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crewai-postgresql
+  namespace: crewai
+  labels:
+    app: crewai-postgresql
+    app.kubernetes.io/name: crewai-postgresql
+    app.kubernetes.io/part-of: crewai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crewai-postgresql
+  template:
+    metadata:
+      labels:
+        app: crewai-postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "crewai"
+        - name: POSTGRES_USER
+          value: "crewai"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: database_password
+        volumeMounts:
+        - name: postgresql-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgresql-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - crewai
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - crewai
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgresql-data
+        persistentVolumeClaim:
+          claimName: crewai-postgresql-pvc
+      - name: postgresql-init
+        configMap:
+          name: crewai-postgresql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crewai-postgresql
+  namespace: crewai
+  labels:
+    app: crewai-postgresql
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: crewai-postgresql
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: crewai-postgresql-pvc
+  namespace: crewai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crewai-postgresql-init
+  namespace: crewai
+data:
+  01-init.sql: |
+    -- CrewAI Database Schema
+    CREATE TABLE IF NOT EXISTS agents (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(255) NOT NULL,
+        goal TEXT,
+        backstory TEXT,
+        verbose BOOLEAN DEFAULT true,
+        allow_delegation BOOLEAN DEFAULT false,
+        tools JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+        id SERIAL PRIMARY KEY,
+        description TEXT NOT NULL,
+        expected_output TEXT,
+        agent_id INTEGER REFERENCES agents(id),
+        status VARCHAR(50) DEFAULT 'pending',
+        result TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS crews (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        agents JSONB,
+        tasks JSONB,
+        status VARCHAR(50) DEFAULT 'idle',
+        result TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS processes (
+        id SERIAL PRIMARY KEY,
+        crew_id INTEGER REFERENCES crews(id),
+        process_type VARCHAR(50) DEFAULT 'sequential',
+        verbose BOOLEAN DEFAULT true,
+        memory BOOLEAN DEFAULT true,
+        cache BOOLEAN DEFAULT true,
+        status VARCHAR(50) DEFAULT 'pending',
+        result TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create indexes for better performance
+    CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_crews_status ON crews(status);
+    CREATE INDEX IF NOT EXISTS idx_processes_status ON processes(status);
+
+    -- Insert default agents
+    INSERT INTO agents (name, role, goal, backstory, tools) VALUES
+    ('CEO Agent', 'Chief Executive Officer', 'Oversee company strategy and decision making', 'Experienced CEO with 20+ years in healthcare technology', '["web_search", "file_operations", "database_query"]'),
+    ('CTO Agent', 'Chief Technology Officer', 'Lead technical strategy and architecture decisions', 'Senior technology leader with expertise in AI and cloud platforms', '["code_analysis", "system_design", "performance_monitoring"]'),
+    ('Development Agent', 'Senior Software Developer', 'Implement and maintain high-quality software solutions', 'Full-stack developer with expertise in Python, React, and cloud technologies', '["code_generation", "testing", "deployment"]'),
+    ('QA Agent', 'Quality Assurance Engineer', 'Ensure software quality and reliability', 'QA specialist with focus on automated testing and CI/CD', '["test_execution", "bug_tracking", "performance_testing"]')
+    ON CONFLICT DO NOTHING; 

@@ -1,0 +1,337 @@
+# Istio Ambient Mesh Chaos Engineering Configuration
+# Tests resilience of thousands of AI agents under failure conditions
+
+# Fault Injection for Testing Resilience
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ai-agents-fault-injection
+  namespace: ai-agents
+spec:
+  hosts:
+  - ai-agent-orchestrator
+  - ai-agent-coding
+  - ai-agent-testing
+  - ai-agent-security
+  - ai-agent-compliance
+  - ai-agent-documentation
+  - ai-agent-discovery
+  http:
+  - fault:
+      delay:
+        percentage:
+          value: 5
+        fixedDelay: 2s
+      abort:
+        percentage:
+          value: 2
+        httpStatus: 500
+    route:
+    - destination:
+        host: ai-agent-orchestrator
+        port:
+          number: 8080
+---
+# Circuit Breaker Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-circuit-breaker
+  namespace: ai-agents
+spec:
+  host: ai-agent-orchestrator
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30ms
+      http:
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 10
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-coding-circuit-breaker
+  namespace: ai-agents
+spec:
+  host: ai-agent-coding
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 30ms
+      http:
+        http2MaxRequests: 2000
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 10
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-testing-circuit-breaker
+  namespace: ai-agents
+spec:
+  host: ai-agent-testing
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 300
+        connectTimeout: 30ms
+      http:
+        http2MaxRequests: 3000
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 10
+---
+# Retry Policies
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ai-agents-retry-policy
+  namespace: ai-agents
+spec:
+  hosts:
+  - ai-agent-orchestrator
+  - ai-agent-coding
+  - ai-agent-testing
+  - ai-agent-security
+  - ai-agent-compliance
+  - ai-agent-documentation
+  - ai-agent-discovery
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes
+      retryRemoteLocalities: true
+    route:
+    - destination:
+        host: ai-agent-orchestrator
+        port:
+          number: 8080
+---
+# Load Balancing Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-load-balancing
+  namespace: ai-agents
+spec:
+  host: ai-agent-orchestrator
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-coding-load-balancing
+  namespace: ai-agents
+spec:
+  host: ai-agent-coding
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ai-agents-testing-load-balancing
+  namespace: ai-agents
+spec:
+  host: ai-agent-testing
+  trafficPolicy:
+    loadBalancer:
+      simple: RANDOM
+---
+# Timeout Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ai-agents-timeout-policy
+  namespace: ai-agents
+spec:
+  hosts:
+  - ai-agent-orchestrator
+  - ai-agent-coding
+  - ai-agent-testing
+  - ai-agent-security
+  - ai-agent-compliance
+  - ai-agent-documentation
+  - ai-agent-discovery
+  http:
+  - timeout: 30s
+    route:
+    - destination:
+        host: ai-agent-orchestrator
+        port:
+          number: 8080
+---
+# CORS Configuration for Web UI
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ai-agents-cors-policy
+  namespace: ai-agents
+spec:
+  hosts:
+  - ai-agent-orchestrator
+  - ai-agent-coding
+  - ai-agent-testing
+  - ai-agent-security
+  - ai-agent-compliance
+  - ai-agent-documentation
+  - ai-agent-discovery
+  http:
+  - corsPolicy:
+      allowOrigins:
+      - exact: "https://medinovai.com"
+      - exact: "https://portal.medinovai.com"
+      allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowHeaders:
+      - authorization
+      - content-type
+      - x-requested-with
+      maxAge: "24h"
+    route:
+    - destination:
+        host: ai-agent-orchestrator
+        port:
+          number: 8080
+---
+# Rate Limiting
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: ai-agents-rate-limit
+  namespace: ai-agents
+spec:
+  workloadSelector:
+    labels:
+      app: ai-agent-orchestrator
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.router
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.ratelimit
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+          domain: ai-agents
+          rate_limit_service:
+            grpc_service:
+              envoy_grpc:
+                cluster_name: rate_limit_cluster
+---
+# Chaos Monkey Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaos-monkey-config
+  namespace: ai-agents
+data:
+  config.yaml: |
+    chaos:
+      enabled: true
+      schedule: "*/30 * * * *"  # Every 30 minutes
+      failureRate: 0.05  # 5% failure rate
+      failureTypes:
+        - podTermination
+        - networkLatency
+        - memoryPressure
+        - cpuPressure
+      excludedNamespaces:
+        - kube-system
+        - istio-system
+      excludedLabels:
+        - app=critical
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaos-monkey
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaos-monkey
+  template:
+    metadata:
+      labels:
+        app: chaos-monkey
+    spec:
+      serviceAccountName: chaos-monkey
+      containers:
+      - name: chaos-monkey
+        image: medinovai/chaos-monkey:latest
+        env:
+        - name: CONFIG_PATH
+          value: "/config/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /config
+      volumes:
+      - name: config
+        configMap:
+          name: chaos-monkey-config
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-monkey
+  namespace: ai-agents
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-monkey
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-monkey
+subjects:
+- kind: ServiceAccount
+  name: chaos-monkey
+  namespace: ai-agents
+roleRef:
+  kind: ClusterRole
+  name: chaos-monkey
+  apiGroup: rbac.authorization.k8s.io 

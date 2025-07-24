@@ -1,0 +1,50 @@
+# General
+.DS_Store
+*.log
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+
+# Helm chart build artifacts
+charts/*/charts/
+charts/*/tmpcharts/
+
+# Kind / Docker leftovers
+kind-config-*.yaml
+
+# VSCode
+.vscode/
+
+# Large files and toolchains
+.rustup/
+.vs-kubernetes/
+minikube
+*.dylib
+rust-lld
+
+# Node modules and build artifacts
+node_modules/
+dist/
+build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# IDE files
+.idea/
+*.sublime-*
+
+# OS generated files
+Thumbs.db
+ehthumbs.db 

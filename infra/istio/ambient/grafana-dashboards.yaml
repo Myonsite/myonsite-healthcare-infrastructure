@@ -1,0 +1,425 @@
+# Grafana Dashboards for AI Agents Monitoring
+# Comprehensive monitoring for thousands of AI agents
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-agents-dashboard
+  namespace: istio-system
+data:
+  ai-agents-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AI Agents Overview",
+        "tags": ["ai-agents", "overview"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active AI Agents",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(ai_agents_active_total)",
+                "legendFormat": "Active Agents"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 100},
+                    {"color": "green", "value": 500}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Total Tasks",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(ai_tasks_total)",
+                "legendFormat": "Total Tasks"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Task Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(ai_tasks_completed_total[5m]) / rate(ai_tasks_total[5m]) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 90},
+                    {"color": "green", "value": 95}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Average Response Time",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(ai_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "P95 Response Time"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              }
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+  ai-agents-scaling.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AI Agents Scaling",
+        "tags": ["ai-agents", "scaling"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Agent Replicas by Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kube_deployment_status_replicas{namespace=\"ai-agents\"}",
+                "legendFormat": "{{deployment}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Replicas",
+                "min": 0
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "CPU Usage by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"ai-agents\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "CPU Usage",
+                "unit": "short"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Memory Usage by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{namespace=\"ai-agents\"}) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Memory Usage",
+                "unit": "bytes"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Scaling Events",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "changes(kube_deployment_status_replicas{namespace=\"ai-agents\"}[5m])",
+                "legendFormat": "{{deployment}}"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+  ai-agents-performance.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AI Agents Performance",
+        "tags": ["ai-agents", "performance"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(ai_requests_total[5m])) by (agent_type)",
+                "legendFormat": "{{agent_type}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Requests/sec"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Response Time Distribution",
+            "type": "heatmap",
+            "targets": [
+              {
+                "expr": "sum(rate(ai_request_duration_seconds_bucket[5m])) by (le)",
+                "legendFormat": "{{le}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Response Time"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Error Rate by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(ai_requests_errors_total[5m])) by (agent_type)",
+                "legendFormat": "{{agent_type}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Errors/sec"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Queue Length by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "ai_queue_length{namespace=\"ai-agents\"}",
+                "legendFormat": "{{agent_type}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Queue Length"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+  ai-agents-resilience.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AI Agents Resilience",
+        "tags": ["ai-agents", "resilience"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Circuit Breaker Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "istio_circuit_breaker_open{namespace=\"ai-agents\"}",
+                "legendFormat": "{{destination_service}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "red", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Retry Attempts",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{response_code=~\"5..\"}[5m])) by (destination_service)",
+                "legendFormat": "{{destination_service}}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Fault Injection Impact",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_requests_total{response_code=500}[5m])) by (destination_service)",
+                "legendFormat": "{{destination_service}}"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Service Health Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{namespace=\"ai-agents\"}",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+  ai-agents-observability.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AI Agents Observability",
+        "tags": ["ai-agents", "observability"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Distributed Tracing",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(istio_request_duration_milliseconds_sum[5m])) by (source_service, destination_service)",
+                "legendFormat": "{{source_service}} -> {{destination_service}}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Log Volume by Agent Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(log_entries_total{namespace=\"ai-agents\"}[5m])) by (agent_type)",
+                "legendFormat": "{{agent_type}}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Error Logs by Severity",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(log_entries_total{namespace=\"ai-agents\", level=~\"error|fatal\"}[5m])) by (level)",
+                "legendFormat": "{{level}}"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Metrics Collection Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(prometheus_target_scrape_pool_targets[5m])) by (job)",
+                "legendFormat": "{{job}}"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: istio-system
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'ai-agents'
+      orgId: 1
+      folder: 'AI Agents'
+      type: configmap
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards 

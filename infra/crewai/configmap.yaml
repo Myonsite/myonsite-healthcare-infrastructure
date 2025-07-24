@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crewai-config
+  namespace: crewai
+data:
+  config.yaml: |
+    # CrewAI Configuration
+    crewai:
+      # Agent Configuration
+      agents:
+        ceo:
+          name: "CEO Agent"
+          role: "Chief Executive Officer"
+          goal: "Oversee company strategy and decision making"
+          backstory: "Experienced CEO with 20+ years in healthcare technology"
+          verbose: true
+          allow_delegation: true
+          tools: ["web_search", "file_operations", "database_query"]
+        
+        cto:
+          name: "CTO Agent"
+          role: "Chief Technology Officer"
+          goal: "Lead technical strategy and architecture decisions"
+          backstory: "Senior technology leader with expertise in AI and cloud platforms"
+          verbose: true
+          allow_delegation: true
+          tools: ["code_analysis", "system_design", "performance_monitoring"]
+        
+        dev:
+          name: "Development Agent"
+          role: "Senior Software Developer"
+          goal: "Implement and maintain high-quality software solutions"
+          backstory: "Full-stack developer with expertise in Python, React, and cloud technologies"
+          verbose: true
+          allow_delegation: false
+          tools: ["code_generation", "testing", "deployment"]
+        
+        qa:
+          name: "QA Agent"
+          role: "Quality Assurance Engineer"
+          goal: "Ensure software quality and reliability"
+          backstory: "QA specialist with focus on automated testing and CI/CD"
+          verbose: true
+          allow_delegation: false
+          tools: ["test_execution", "bug_tracking", "performance_testing"]
+      
+      # Task Configuration
+      tasks:
+        default_timeout: 300  # 5 minutes
+        max_iterations: 3
+        memory_enabled: true
+      
+      # Process Configuration
+      process:
+        sequential: true
+        verbose: true
+        memory: true
+        cache: true
+      
+      # API Configuration
+      api:
+        host: "0.0.0.0"
+        port: 8000
+        workers: 4
+        timeout: 300
+        cors_origins: ["*"]
+      
+      # Database Configuration
+      database:
+        type: "postgresql"
+        host: "crewai-postgresql"
+        port: 5432
+        name: "crewai"
+        user: "crewai"
+        pool_size: 10
+        max_overflow: 20
+      
+      # Monitoring Configuration
+      monitoring:
+        prometheus_enabled: true
+        metrics_port: 9090
+        health_check_interval: 30
+      
+      # Logging Configuration
+      logging:
+        level: "INFO"
+        format: "json"
+        output: "stdout"
+        file_rotation: true
+        max_file_size: "100MB"
+        backup_count: 5 

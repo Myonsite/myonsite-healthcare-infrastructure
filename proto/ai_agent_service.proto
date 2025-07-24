@@ -1,0 +1,391 @@
+syntax = "proto3";
+
+package medinovai.ai_agent;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
+
+// AI Agent Service for thousands of AI agents
+service AIAgentService {
+  // Agent lifecycle management
+  rpc CreateAgent(CreateAgentRequest) returns (Agent);
+  rpc GetAgent(GetAgentRequest) returns (Agent);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc UpdateAgent(UpdateAgentRequest) returns (Agent);
+  rpc DeleteAgent(DeleteAgentRequest) returns (google.protobuf.Empty);
+  rpc RegisterAgent(RegisterAgentRequest) returns (Agent);
+  rpc DeregisterAgent(DeregisterAgentRequest) returns (google.protobuf.Empty);
+  
+  // Task management
+  rpc AssignTask(AssignTaskRequest) returns (Task);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc UpdateTask(UpdateTaskRequest) returns (Task);
+  rpc CompleteTask(CompleteTaskRequest) returns (TaskResult);
+  rpc CancelTask(CancelTaskRequest) returns (google.protobuf.Empty);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  
+  // Agent communication
+  rpc SendMessage(SendMessageRequest) returns (Message);
+  rpc ReceiveMessages(ReceiveMessagesRequest) returns (stream Message);
+  rpc BroadcastMessage(BroadcastMessageRequest) returns (google.protobuf.Empty);
+  
+  // Health and monitoring
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetMetrics(GetMetricsRequest) returns (Metrics);
+  rpc GetStatus(GetStatusRequest) returns (AgentStatus);
+  
+  // Resource management
+  rpc AllocateResources(AllocateResourcesRequest) returns (ResourceAllocation);
+  rpc ReleaseResources(ReleaseResourcesRequest) returns (google.protobuf.Empty);
+  rpc GetResourceUsage(GetResourceUsageRequest) returns (ResourceUsage);
+}
+
+// Agent definitions
+message Agent {
+  string id = 1;
+  string name = 2;
+  AgentType type = 3;
+  AgentStatus status = 4;
+  string version = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp last_heartbeat = 8;
+  map<string, string> capabilities = 9;
+  map<string, string> metadata = 10;
+  repeated string tags = 11;
+  ResourceUsage current_resources = 12;
+  repeated Task active_tasks = 13;
+  AgentHealth health = 14;
+}
+
+message AgentHealth {
+  string status = 1; // "healthy", "unhealthy", "degraded"
+  string message = 2;
+  google.protobuf.Timestamp last_check = 3;
+  map<string, double> metrics = 4;
+}
+
+enum AgentType {
+  AGENT_TYPE_UNSPECIFIED = 0;
+  AGENT_TYPE_CODING = 1;
+  AGENT_TYPE_TESTING = 2;
+  AGENT_TYPE_SECURITY = 3;
+  AGENT_TYPE_COMPLIANCE = 4;
+  AGENT_TYPE_DOCUMENTATION = 5;
+  AGENT_TYPE_ORCHESTRATOR = 6;
+  AGENT_TYPE_DISCOVERY = 7;
+  AGENT_TYPE_MONITORING = 8;
+  AGENT_TYPE_ANALYTICS = 9;
+}
+
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_IDLE = 1;
+  AGENT_STATUS_BUSY = 2;
+  AGENT_STATUS_ERROR = 3;
+  AGENT_STATUS_OFFLINE = 4;
+  AGENT_STATUS_INITIALIZING = 5;
+  AGENT_STATUS_TERMINATING = 6;
+}
+
+// Task definitions
+message Task {
+  string id = 1;
+  string agent_id = 2;
+  string title = 3;
+  string description = 4;
+  TaskType type = 5;
+  TaskStatus status = 6;
+  TaskPriority priority = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+  google.protobuf.Timestamp deadline = 11;
+  map<string, string> parameters = 12;
+  map<string, string> metadata = 13;
+  repeated string dependencies = 14;
+  TaskResult result = 15;
+  ResourceRequirements resources = 16;
+}
+
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_CODE_REVIEW = 1;
+  TASK_TYPE_UNIT_TEST = 2;
+  TASK_TYPE_INTEGRATION_TEST = 3;
+  TASK_TYPE_SECURITY_SCAN = 4;
+  TASK_TYPE_COMPLIANCE_CHECK = 5;
+  TASK_TYPE_DOCUMENTATION_UPDATE = 6;
+  TASK_TYPE_PERFORMANCE_ANALYSIS = 7;
+  TASK_TYPE_BUG_FIX = 8;
+  TASK_TYPE_FEATURE_IMPLEMENTATION = 9;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+  TASK_STATUS_CANCELLED = 5;
+  TASK_STATUS_TIMEOUT = 6;
+}
+
+enum TaskPriority {
+  TASK_PRIORITY_UNSPECIFIED = 0;
+  TASK_PRIORITY_LOW = 1;
+  TASK_PRIORITY_NORMAL = 2;
+  TASK_PRIORITY_HIGH = 3;
+  TASK_PRIORITY_CRITICAL = 4;
+}
+
+message TaskResult {
+  bool success = 1;
+  string message = 2;
+  map<string, string> data = 3;
+  repeated string errors = 4;
+  repeated string warnings = 5;
+  google.protobuf.Any details = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// Resource management
+message ResourceRequirements {
+  double cpu_cores = 1;
+  int64 memory_mb = 2;
+  int64 storage_gb = 3;
+  int32 gpu_count = 4;
+  map<string, string> custom_resources = 5;
+}
+
+message ResourceAllocation {
+  string allocation_id = 1;
+  string agent_id = 2;
+  ResourceRequirements allocated = 3;
+  google.protobuf.Timestamp allocated_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  string status = 6; // "allocated", "in_use", "released"
+}
+
+message ResourceUsage {
+  double cpu_usage_percent = 1;
+  double memory_usage_percent = 2;
+  double storage_usage_percent = 3;
+  double gpu_usage_percent = 4;
+  map<string, double> custom_metrics = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// Message definitions
+message Message {
+  string id = 1;
+  string from_agent_id = 2;
+  string to_agent_id = 3;
+  string subject = 4;
+  string content = 5;
+  MessageType type = 6;
+  google.protobuf.Timestamp timestamp = 7;
+  map<string, string> headers = 8;
+  google.protobuf.Any payload = 9;
+  bool urgent = 10;
+}
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  MESSAGE_TYPE_TASK_ASSIGNMENT = 1;
+  MESSAGE_TYPE_TASK_COMPLETION = 2;
+  MESSAGE_TYPE_HEARTBEAT = 3;
+  MESSAGE_TYPE_ERROR = 4;
+  MESSAGE_TYPE_WARNING = 5;
+  MESSAGE_TYPE_INFO = 6;
+  MESSAGE_TYPE_COMMAND = 7;
+  MESSAGE_TYPE_RESPONSE = 8;
+}
+
+// Metrics definitions
+message Metrics {
+  string agent_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  map<string, double> counters = 3;
+  map<string, double> gauges = 4;
+  map<string, Histogram> histograms = 5;
+  repeated string labels = 6;
+}
+
+message Histogram {
+  repeated double buckets = 1;
+  repeated int64 counts = 2;
+  double sum = 3;
+  int64 count = 4;
+}
+
+// Request/Response messages
+message CreateAgentRequest {
+  string name = 1;
+  AgentType type = 2;
+  map<string, string> capabilities = 3;
+  map<string, string> metadata = 4;
+  repeated string tags = 5;
+}
+
+message GetAgentRequest {
+  string agent_id = 1;
+}
+
+message ListAgentsRequest {
+  AgentType type = 1;
+  AgentStatus status = 2;
+  repeated string tags = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdateAgentRequest {
+  string agent_id = 1;
+  string name = 2;
+  map<string, string> capabilities = 3;
+  map<string, string> metadata = 4;
+  repeated string tags = 5;
+}
+
+message DeleteAgentRequest {
+  string agent_id = 1;
+  bool force = 2;
+}
+
+message RegisterAgentRequest {
+  string name = 1;
+  AgentType type = 2;
+  string version = 3;
+  map<string, string> capabilities = 4;
+  map<string, string> metadata = 5;
+  repeated string tags = 6;
+  ResourceRequirements resource_requirements = 7;
+}
+
+message DeregisterAgentRequest {
+  string agent_id = 1;
+  string reason = 2;
+}
+
+message AssignTaskRequest {
+  string agent_id = 1;
+  string title = 2;
+  string description = 3;
+  TaskType type = 4;
+  TaskPriority priority = 5;
+  google.protobuf.Timestamp deadline = 6;
+  map<string, string> parameters = 7;
+  map<string, string> metadata = 8;
+  repeated string dependencies = 9;
+  ResourceRequirements resources = 10;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message UpdateTaskRequest {
+  string task_id = 1;
+  TaskStatus status = 2;
+  string message = 3;
+  map<string, string> metadata = 4;
+  TaskResult result = 5;
+}
+
+message CompleteTaskRequest {
+  string task_id = 1;
+  TaskResult result = 2;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+  string reason = 2;
+}
+
+message ListTasksRequest {
+  string agent_id = 1;
+  TaskStatus status = 2;
+  TaskType type = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message SendMessageRequest {
+  string from_agent_id = 1;
+  string to_agent_id = 2;
+  string subject = 3;
+  string content = 4;
+  MessageType type = 5;
+  map<string, string> headers = 6;
+  google.protobuf.Any payload = 7;
+  bool urgent = 8;
+}
+
+message ReceiveMessagesRequest {
+  string agent_id = 1;
+  MessageType type = 2;
+  bool urgent_only = 3;
+  int32 max_messages = 4;
+}
+
+message BroadcastMessageRequest {
+  string from_agent_id = 1;
+  string subject = 2;
+  string content = 3;
+  MessageType type = 4;
+  repeated string target_agent_types = 5;
+  repeated string target_tags = 6;
+  map<string, string> headers = 7;
+  google.protobuf.Any payload = 8;
+}
+
+message HealthCheckRequest {
+  string agent_id = 1;
+}
+
+message HealthCheckResponse {
+  string status = 1;
+  string message = 2;
+  map<string, double> metrics = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message GetMetricsRequest {
+  string agent_id = 1;
+  repeated string metric_names = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+}
+
+message GetStatusRequest {
+  string agent_id = 1;
+}
+
+message AllocateResourcesRequest {
+  string agent_id = 1;
+  ResourceRequirements requirements = 2;
+  google.protobuf.Timestamp duration = 3;
+}
+
+message ReleaseResourcesRequest {
+  string allocation_id = 1;
+  string agent_id = 2;
+}
+
+message GetResourceUsageRequest {
+  string agent_id = 1;
+} 

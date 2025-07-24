@@ -1,0 +1,57 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: hipaa-compliant-logging
+  namespace: istio-system
+spec:
+  accessLogging:
+    - providers:
+        - name: hipaa-json-logs
+      filter:
+        expression: 'true'  # Log all requests for compliance
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-telemetry-config
+  namespace: istio-system
+data:
+  mesh: |
+    defaultConfig:
+      proxyStatsMatcher:
+        inclusionRegexps:
+        - ".*outlier_detection.*"
+        - ".*circuit_breakers.*"
+        - ".*upstream_rq_retry.*"
+        - ".*upstream_rq_pending.*"
+        - ".*ssl.*"
+        - ".*rbac.*"
+    extensionProviders:
+    - name: hipaa-json-logs
+      envoyFileAccessLog:
+        path: "/dev/stdout"
+        format: |
+          {
+            "timestamp": "%START_TIME%",
+            "trace_id": "%REQ(X-B3-TRACEID)%",
+            "src_workload": "%DOWNSTREAM_LOCAL_ADDRESS%",
+            "dst_workload": "%UPSTREAM_HOST%",
+            "method": "%REQ(:METHOD)%",
+            "path": "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%",
+            "protocol": "%PROTOCOL%",
+            "response_code": "%RESPONSE_CODE%",
+            "response_flags": "%RESPONSE_FLAGS%",
+            "bytes_received": "%BYTES_RECEIVED%",
+            "bytes_sent": "%BYTES_SENT%",
+            "duration": "%DURATION%",
+            "upstream_service_time": "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%",
+            "x_forwarded_for": "%REQ(X-FORWARDED-FOR)%",
+            "user_agent": "%REQ(USER-AGENT)%",
+            "request_id": "%REQ(X-REQUEST-ID)%",
+            "authority": "%REQ(:AUTHORITY)%",
+            "connection_security_policy": "%CONNECTION_SECURITY_POLICY%",
+            "tls_version": "%DOWNSTREAM_TLS_VERSION%",
+            "tls_cipher": "%DOWNSTREAM_TLS_CIPHER%",
+            "mtls_mode": "%DOWNSTREAM_PEER_SUBJECT%",
+            "auth_policy": "%DYNAMIC_METADATA(envoy.common:access_log_hint)%"
+          } 

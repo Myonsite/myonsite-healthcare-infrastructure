@@ -1,0 +1,14 @@
+service:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi 

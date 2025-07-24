@@ -1,0 +1,10 @@
+configuration:
+  provider: aws
+  backupStorageLocation:
+    bucket: velero-local
+    prefix: backups
+  volumeSnapshotLocation:
+    name: default
+    provider: aws
+
+deployRestic: false 

@@ -1,0 +1,220 @@
+# KEDA ScaledObject Configurations for AI Agent Autoscaling
+# Enables scaling from 50-200 agents to thousands of agents
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-coding-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-coding
+    app.kubernetes.io/name: ai-agent-coding
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-coding-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 5
+  maxReplicaCount: 100
+  fallback:
+    failureThreshold: 3
+    replicas: 10
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_requests_per_second
+      query: |
+        sum(rate(ai_agent_requests_total{agent_type="coding"}[1m]))
+      threshold: "10"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_queue_length
+      query: |
+        ai_agent_task_queue_length{agent_type="coding"}
+      threshold: "50"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_cpu_usage
+      query: |
+        avg(rate(container_cpu_usage_seconds_total{pod=~"ai-agent-coding.*"}[1m])) * 100
+      threshold: "70"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-testing-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-testing
+    app.kubernetes.io/name: ai-agent-testing
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-testing-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 3
+  maxReplicaCount: 50
+  fallback:
+    failureThreshold: 3
+    replicas: 5
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_test_queue_length
+      query: |
+        ai_agent_task_queue_length{agent_type="testing"}
+      threshold: "20"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_test_duration
+      query: |
+        avg(ai_agent_task_duration_seconds{agent_type="testing"})
+      threshold: "300"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-security-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-security
+    app.kubernetes.io/name: ai-agent-security
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-security-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 2
+  maxReplicaCount: 30
+  fallback:
+    failureThreshold: 3
+    replicas: 3
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_security_scan_queue
+      query: |
+        ai_agent_task_queue_length{agent_type="security"}
+      threshold: "10"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_vulnerability_count
+      query: |
+        ai_agent_vulnerabilities_total{agent_type="security"}
+      threshold: "100"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-compliance-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-compliance
+    app.kubernetes.io/name: ai-agent-compliance
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-compliance-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  fallback:
+    failureThreshold: 3
+    replicas: 3
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_compliance_audit_queue
+      query: |
+        ai_agent_task_queue_length{agent_type="compliance"}
+      threshold: "15"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_compliance_violations
+      query: |
+        ai_agent_compliance_violations_total{agent_type="compliance"}
+      threshold: "50"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-documentation-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-documentation
+    app.kubernetes.io/name: ai-agent-documentation
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-documentation-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 2
+  maxReplicaCount: 25
+  fallback:
+    failureThreshold: 3
+    replicas: 3
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_documentation_queue
+      query: |
+        ai_agent_task_queue_length{agent_type="documentation"}
+      threshold: "25"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_documentation_pages
+      query: |
+        ai_agent_documentation_pages_total{agent_type="documentation"}
+      threshold: "100"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-agent-discovery-scaler
+  namespace: ai-agents
+  labels:
+    app: ai-agent-discovery
+    app.kubernetes.io/name: ai-agent-discovery
+    app.kubernetes.io/part-of: medinovai
+spec:
+  scaleTargetRef:
+    name: ai-agent-discovery-deployment
+  pollingInterval: 30
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_discovery_requests
+      query: |
+        rate(ai_agent_requests_total{agent_type="discovery"}[1m])
+      threshold: "5"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+      metricName: ai_agent_service_count
+      query: |
+        ai_agent_discovered_services_total{agent_type="discovery"}
+      threshold: "1000" 

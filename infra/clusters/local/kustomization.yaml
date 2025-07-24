@@ -1,0 +1,111 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: infrastructure
+
+resources:
+  - ../base
+  - storage-class-local.yaml
+  - medinovai-common.yaml
+  - backstage-simple.yaml
+
+patches:
+  - target:
+      kind: Namespace
+      name: infrastructure
+    patch: |-
+      - op: add
+        path: /metadata/labels/istio-injection
+        value: enabled
+
+helmCharts:
+  - name: harbor
+    repo: https://helm.goharbor.io
+    version: 1.15.1  # Latest stable version
+    releaseName: harbor
+    namespace: infrastructure
+    valuesFile: harbor-values-dev.yaml
+
+  - name: kube-prometheus-stack
+    repo: https://prometheus-community.github.io/helm-charts
+    version: 66.2.2  # Latest stable version
+    releaseName: prom-stack
+    namespace: infrastructure
+    valuesFile: ../../values/prom-stack-local.yaml
+
+  - name: loki
+    repo: https://grafana.github.io/helm-charts
+    version: 6.19.0  # Latest stable version
+    releaseName: loki
+    namespace: infrastructure
+    valuesFile: ../../values/loki-local.yaml
+
+  - name: velero
+    repo: https://vmware-tanzu.github.io/helm-charts
+    version: 8.0.0  # Latest stable version
+    releaseName: velero
+    namespace: infrastructure
+    valuesFile: ../../values/velero-local.yaml
+
+  - name: kured
+    repo: https://kubereboot.github.io/charts
+    version: 5.5.1  # Latest stable version
+    releaseName: kured
+    namespace: infrastructure
+    valuesFile: ../../values/kured-local.yaml
+
+  - name: cert-manager
+    repo: https://charts.jetstack.io
+    version: 1.16.2  # Latest stable version
+    releaseName: cert-manager
+    namespace: infrastructure
+    valuesFile: ../../values/cert-manager-local.yaml
+
+  - name: external-secrets
+    repo: https://charts.external-secrets.io
+    version: 0.10.7  # Latest stable version
+    releaseName: external-secrets
+    namespace: infrastructure
+    valuesFile: ../../values/external-secrets-local.yaml
+
+  - name: gatekeeper
+    repo: https://open-policy-agent.github.io/gatekeeper/charts
+    version: 3.18.1  # Latest stable version
+    releaseName: gatekeeper
+    namespace: infrastructure
+    valuesFile: ../../values/gatekeeper-local.yaml
+
+  - name: base
+    repo: https://istio-release.storage.googleapis.com/charts
+    version: 1.24.1  # Latest stable version
+    releaseName: istio-base
+    namespace: infrastructure
+    valuesFile: ../../values/istio-base-local.yaml
+
+  - name: istiod
+    repo: https://istio-release.storage.googleapis.com/charts
+    version: 1.24.1  # Latest stable version
+    releaseName: istiod
+    namespace: infrastructure
+    valuesFile: ../../values/istiod-local.yaml
+
+  - name: gateway
+    repo: https://istio-release.storage.googleapis.com/charts
+    version: 1.24.1  # Latest stable version
+    releaseName: istio-gateway
+    namespace: infrastructure
+    valuesFile: ../../values/istio-gateway-local.yaml
+
+  - name: goldilocks
+    repo: https://charts.fairwinds.com/stable
+    version: 8.0.2  # Latest stable version
+    releaseName: goldilocks
+    namespace: infrastructure
+    valuesFile: ../../values/goldilocks-local.yaml
+
+  - name: opentelemetry-operator
+    repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+    version: 0.75.0  # Latest stable version
+    releaseName: otel-operator
+    namespace: infrastructure
+    valuesFile: ../../values/otel-operator-local.yaml 

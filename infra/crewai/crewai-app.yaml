@@ -1,0 +1,191 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crewai-app
+  namespace: crewai
+  labels:
+    app: crewai-app
+    app.kubernetes.io/name: crewai-app
+    app.kubernetes.io/part-of: crewai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: crewai-app
+  template:
+    metadata:
+      labels:
+        app: crewai-app
+    spec:
+      containers:
+      - name: crewai-app
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8000
+        - containerPort: 9090
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://crewai:$(DATABASE_PASSWORD)@crewai-postgresql:5432/crewai"
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: database_password
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: openai_api_key
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: anthropic_api_key
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: google_api_key
+        - name: SERPER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: serper_api_key
+        - name: TAVILY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: tavily_api_key
+        - name: LANGCHAIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: langchain_api_key
+        - name: LANGCHAIN_PROJECT
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: langchain_project
+        - name: LANGCHAIN_TRACING_V2
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: langchain_tracing_v2
+        - name: LANGCHAIN_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: crewai-secrets
+              key: langchain_endpoint
+        volumeMounts:
+        - name: crewai-config
+          mountPath: /app/config
+        - name: crewai-code
+          mountPath: /app
+        workingDir: /app
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          pip install --upgrade pip
+          pip install crewai fastapi uvicorn psycopg2-binary sqlalchemy alembic prometheus-client
+          cat > main.py << 'EOF'
+          from fastapi import FastAPI
+          app = FastAPI()
+          
+          @app.get("/health")
+          def health():
+              return {"status": "healthy", "service": "crewai"}
+          
+          @app.get("/ready")
+          def ready():
+              return {"status": "ready", "service": "crewai"}
+          
+          @app.get("/")
+          def root():
+              return {"message": "CrewAI API", "version": "1.0.0"}
+          
+          @app.get("/agents")
+          def agents():
+              return {"agents": []}
+          
+          @app.get("/crews")
+          def crews():
+              return {"crews": []}
+          EOF
+          python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: crewai-config
+        configMap:
+          name: crewai-config
+      - name: crewai-code
+        emptyDir: {}
+      initContainers:
+      - name: init-crewai
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          pip install crewai
+          echo "CrewAI initialized successfully"
+        volumeMounts:
+        - name: crewai-code
+          mountPath: /app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crewai-app
+  namespace: crewai
+  labels:
+    app: crewai-app
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: crewai-app
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crewai-ingress
+  namespace: crewai
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - host: crewai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: crewai-app
+            port:
+              number: 8000 

@@ -1,0 +1,245 @@
+name: MedinovAI CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  CLUSTER_NAME: medinovai-prod
+
+jobs:
+  # Security and dependency scanning
+  security-scan:
+    name: Security & Dependency Scan
+    runs-on: ubuntu-24.04  # Latest stable Ubuntu
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2  # Latest stable version
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0  # Latest stable version
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3.27.9
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Build and push Docker images
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-24.04
+    needs: security-scan
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.7.1  # Latest stable version
+        with:
+          platforms: linux/amd64,linux/arm64
+          driver-opts: |
+            image=moby/buildkit:v0.17.3
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4.0.2  # Latest stable version
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2.0.1  # Latest stable version
+        with:
+          mask-password: true
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5.5.1  # Latest stable version
+        with:
+          images: ${{ env.ECR_REGISTRY }}/medinovai
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6.9.0  # Latest stable version
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Sign container image
+        uses: sigstore/cosign-installer@v3.7.0  # Latest stable version
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign the published Docker image
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          cosign sign --yes ${{ env.ECR_REGISTRY }}/medinovai@${{ steps.build.outputs.digest }}
+
+  # Terraform validation and planning
+  terraform-check:
+    name: Terraform Validation
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: ops/terraform
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2  # Latest stable version
+        with:
+          terraform_version: 1.8.5  # Latest stable Terraform
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-Terraform-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request'
+        run: |
+          terraform plan -no-color -out=tfplan
+        continue-on-error: true
+
+  # Kubernetes manifest validation
+  k8s-validation:
+    name: Kubernetes Validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4.0.0  # Latest stable version
+        with:
+          version: 'v1.31.3'  # Latest stable kubectl
+
+      - name: Validate Kubernetes manifests
+        run: |
+          find infra -name "*.yaml" -o -name "*.yml" | xargs kubectl apply --dry-run=client -f
+
+      - name: Validate Kustomize overlays
+        run: |
+          kubectl kustomize infra/clusters/local > /tmp/local-manifests.yaml
+          kubectl apply --dry-run=client -f /tmp/local-manifests.yaml
+
+  # Deploy to production (only on main branch)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-24.04
+    needs: [build-and-push, terraform-check, k8s-validation]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-Deploy-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4.0.0
+        with:
+          version: 'v1.31.3'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Update image tag in manifests
+        run: |
+          NEW_TAG="${{ needs.build-and-push.outputs.image-tag }}"
+          # Update any deployment manifests with new image tag
+          sed -i "s|image: ${{ env.ECR_REGISTRY }}/medinovai:.*|image: ${NEW_TAG}|g" infra/clusters/prod/*.yaml || true
+
+      - name: Deploy to production cluster
+        run: |
+          kubectl apply -k infra/clusters/prod
+          kubectl -n infrastructure rollout status deployment/medinovai-common --timeout=600s
+          kubectl -n infrastructure rollout status deployment/backstage --timeout=600s
+
+      - name: Commit updated manifests
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore: update production image tags [skip ci]"
+          git push
+
+      - name: Create deployment notification
+        if: success()
+        run: |
+          echo "✅ Successfully deployed MedinovAI to production!"
+          echo "🏥 Image: ${{ needs.build-and-push.outputs.image-tag }}"
+          echo "🔐 Digest: ${{ needs.build-and-push.outputs.image-digest }}" 

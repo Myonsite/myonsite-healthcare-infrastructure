@@ -1,0 +1,11 @@
+expose:
+  tls:
+    enabled: false
+  ingress:
+    hosts:
+      core: harbor.local
+harborAdminPassword: Harbor12345
+persistence:
+  persistentVolumeClaim:
+    registry:
+      storageClass: local-path 

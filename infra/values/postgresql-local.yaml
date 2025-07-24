@@ -1,0 +1,6 @@
+auth:
+  postgresPassword: pgpw
+  database: app
+primary:
+  persistence:
+    storageClass: local-path 

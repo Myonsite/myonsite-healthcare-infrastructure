@@ -1,0 +1,182 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-testing
+  namespace: ai-agents
+  labels:
+    app: ai-agent-testing
+    app.kubernetes.io/name: ai-agent-testing
+    app.kubernetes.io/part-of: medinovai
+    version: v1.0.0
+spec:
+  replicas: 8
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 3
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: ai-agent-testing
+  template:
+    metadata:
+      labels:
+        app: ai-agent-testing
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ai-agent-testing
+      containers:
+      - name: ai-agent-testing
+        image: medinovai/ai-agent-testing:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - name: http-api
+          containerPort: 8080
+          protocol: TCP
+        - name: grpc-api
+          containerPort: 9090
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SERVICE_NAME
+          value: "ai-agent-testing"
+        - name: AGENT_TYPE
+          value: "testing"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: METRICS_PORT
+          value: "9091"
+        - name: HEALTH_PORT
+          value: "8081"
+        - name: GRPC_PORT
+          value: "9090"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: MAX_CONCURRENT_TESTS
+          value: "20"
+        - name: TEST_TIMEOUT
+          value: "1800"
+        - name: COVERAGE_THRESHOLD
+          value: "80"
+        - name: TEST_FRAMEWORKS
+          value: "pytest,jest,mocha,junit,go-test,rust-test"
+        - name: ENABLE_PARALLEL_TESTING
+          value: "true"
+        - name: MAX_PARALLEL_WORKERS
+          value: "8"
+        - name: ENABLE_MUTATION_TESTING
+          value: "true"
+        - name: ENABLE_PERFORMANCE_TESTING
+          value: "true"
+        - name: ENABLE_SECURITY_TESTING
+          value: "true"
+        - name: TEST_REPORT_FORMAT
+          value: "junit,html,json"
+        - name: ENABLE_TEST_GENERATION
+          value: "true"
+        - name: ENABLE_TEST_OPTIMIZATION
+          value: "true"
+        resources:
+          requests:
+            memory: "3Gi"
+            cpu: "1500m"
+          limits:
+            memory: "12Gi"
+            cpu: "6000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: test-results
+          mountPath: /tmp/test-results
+          readOnly: false
+        - name: test-cache
+          mountPath: /tmp/test-cache
+          readOnly: false
+      volumes:
+      - name: test-results
+        emptyDir: {}
+      - name: test-cache
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-testing
+  namespace: ai-agents
+  labels:
+    app: ai-agent-testing
+    app.kubernetes.io/name: ai-agent-testing
+    app.kubernetes.io/part-of: medinovai
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9091"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc-api
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  selector:
+    app: ai-agent-testing
+  sessionAffinity: None 

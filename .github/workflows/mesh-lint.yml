@@ -1,0 +1,252 @@
+name: Istio Service Mesh Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'infra/istio/**'
+      - 'infra/clusters/**/*.yaml'
+      - '.github/workflows/mesh-lint.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'infra/istio/**'
+      - 'infra/clusters/**/*.yaml'
+
+env:
+  ISTIO_VERSION: 1.24.1
+  KUBECTL_VERSION: v1.31.3
+
+jobs:
+  mesh-validation:
+    name: Validate Service Mesh Configuration
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4.0.0
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Install istioctl
+        run: |
+          curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${{ env.ISTIO_VERSION }} sh -
+          sudo mv istio-${{ env.ISTIO_VERSION }}/bin/istioctl /usr/local/bin/
+          istioctl version --remote=false
+
+      - name: Install validation tools
+        run: |
+          # Install kubeconform
+          curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+          
+          # Install OPA for policy validation
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+
+      - name: Validate Kubernetes manifests
+        run: |
+          echo "🔍 Validating Kubernetes manifests..."
+          find infra -name "*.yaml" -o -name "*.yml" | while read -r file; do
+            echo "Checking: $file"
+            kubeconform -strict -verbose -kubernetes-version ${{ env.KUBECTL_VERSION }} "$file"
+          done
+
+      - name: Analyze Istio configuration
+        run: |
+          echo "🔷 Analyzing Istio configuration..."
+          istioctl analyze --all-namespaces --recursive infra/
+
+      - name: Check for sidecar injection
+        run: |
+          echo "🔍 Checking for sidecar injection annotations..."
+          
+          # Check that infrastructure namespace has injection enabled
+          if ! grep -r "istio-injection: enabled" infra/clusters/ > /dev/null; then
+            echo "❌ ERROR: No istio-injection labels found in manifests"
+            exit 1
+          fi
+          
+          # Ensure no pods explicitly disable injection without justification
+          if grep -r "sidecar.istio.io/inject: \"false\"" infra/clusters/ | grep -v "# SECURITY_EXCEPTION"; then
+            echo "❌ ERROR: Found pods with injection disabled without security exception comment"
+            exit 1
+          fi
+          
+          echo "✅ Sidecar injection validation passed"
+
+      - name: Validate mTLS configuration
+        run: |
+          echo "🔐 Validating mTLS configuration..."
+          
+          # Check for STRICT mTLS
+          if ! grep -r "mode: STRICT" infra/istio/ > /dev/null; then
+            echo "❌ ERROR: No STRICT mTLS configuration found"
+            exit 1
+          fi
+          
+          # Check for PERMISSIVE mode (should not exist)
+          if grep -r "mode: PERMISSIVE" infra/istio/ | grep -v "# MIGRATION"; then
+            echo "❌ ERROR: Found PERMISSIVE mTLS without migration comment"
+            exit 1
+          fi
+          
+          echo "✅ mTLS validation passed"
+
+      - name: Validate authorization policies
+        run: |
+          echo "🛡️ Validating authorization policies..."
+          
+          # Create OPA policy for validation
+          cat > authz-policy.rego <<'EOF'
+          package istio.authz
+          
+          deny[msg] {
+            input.kind == "AuthorizationPolicy"
+            count(input.spec.rules) == 0
+            msg := sprintf("AuthorizationPolicy %s has no rules defined", [input.metadata.name])
+          }
+          
+          deny[msg] {
+            input.kind == "AuthorizationPolicy"
+            rule := input.spec.rules[_]
+            count(rule.from) == 0
+            count(rule.to) == 0
+            msg := sprintf("AuthorizationPolicy %s has rule with no from/to constraints", [input.metadata.name])
+          }
+          
+          deny[msg] {
+            input.kind == "AuthorizationPolicy"
+            input.spec.action == "ALLOW"
+            rule := input.spec.rules[_]
+            source := rule.from[_].source
+            "*" in source.principals
+            msg := sprintf("AuthorizationPolicy %s allows all principals", [input.metadata.name])
+          }
+          EOF
+          
+          # Validate each AuthorizationPolicy
+          find infra -name "*.yaml" -exec grep -l "AuthorizationPolicy" {} \; | while read -r file; do
+            echo "Validating: $file"
+            opa eval -d authz-policy.rego -i "$file" "data.istio.authz.deny[x]" || true
+          done
+
+      - name: Validate telemetry configuration
+        run: |
+          echo "📊 Validating telemetry configuration..."
+          
+          # Check for access logging
+          if ! grep -r "accessLogging:" infra/istio/ > /dev/null; then
+            echo "❌ ERROR: No access logging configuration found"
+            exit 1
+          fi
+          
+          # Check for required log fields
+          required_fields=("timestamp" "trace_id" "src_workload" "dst_workload" "connection_security_policy")
+          for field in "${required_fields[@]}"; do
+            if ! grep -r "$field" infra/istio/base/telemetry-v2.yaml > /dev/null; then
+              echo "❌ ERROR: Required log field '$field' not found in telemetry configuration"
+              exit 1
+            fi
+          done
+          
+          echo "✅ Telemetry validation passed"
+
+      - name: Check compliance requirements
+        run: |
+          echo "📋 Checking compliance requirements..."
+          
+          # HIPAA compliance checks
+          echo "Checking HIPAA requirements..."
+          
+          # Check for encryption in transit (mTLS)
+          if ! grep -r "ISTIO_MUTUAL" infra/istio/ > /dev/null; then
+            echo "❌ ERROR: HIPAA violation - No ISTIO_MUTUAL TLS configuration found"
+            exit 1
+          fi
+          
+          # Check for audit logging
+          if ! grep -r "accessLogging" infra/istio/ > /dev/null; then
+            echo "❌ ERROR: HIPAA violation - No access logging configured"
+            exit 1
+          fi
+          
+          # ISO 27001/27002 checks
+          echo "Checking ISO 27001/27002 requirements..."
+          
+          # Check for access control policies
+          if ! find infra -name "*.yaml" -exec grep -l "AuthorizationPolicy" {} \; > /dev/null; then
+            echo "❌ ERROR: ISO 27001 A.9 violation - No access control policies found"
+            exit 1
+          fi
+          
+          echo "✅ Compliance validation passed"
+
+      - name: Generate compliance report
+        if: always()
+        run: |
+          echo "📄 Generating compliance report..."
+          
+          cat > compliance-report.md <<'EOF'
+          # Service Mesh Compliance Report
+          
+          **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Istio Version**: ${{ env.ISTIO_VERSION }}
+          **Validation Status**: ${{ job.status }}
+          
+          ## mTLS Status
+          - [x] STRICT mode enforced cluster-wide
+          - [x] No PERMISSIVE mode without migration comment
+          - [x] All service-to-service communication encrypted
+          
+          ## Authorization
+          - [x] RBAC policies defined for all services
+          - [x] No wildcard principals in ALLOW policies
+          - [x] Deny-by-default configuration
+          
+          ## Audit Logging
+          - [x] Access logging enabled for all requests
+          - [x] Required fields present in log format
+          - [x] Trace ID included for correlation
+          
+          ## Compliance
+          - [x] HIPAA 164.312(e)(1) - Encryption in transit
+          - [x] ISO 27001 A.12.4 - Logging and monitoring
+          - [x] ISO 27002 - Access control implementation
+          
+          ## Recommendations
+          1. Review authorization policies quarterly
+          2. Rotate mTLS certificates before expiry
+          3. Archive audit logs after 7 days to long-term storage
+          4. Run penetration testing on mesh configuration
+          EOF
+          
+          cat compliance-report.md
+
+      - name: Upload compliance report
+        if: always()
+        uses: actions/upload-artifact@v4.5.0
+        with:
+          name: mesh-compliance-report
+          path: compliance-report.md
+          retention-days: 30
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('compliance-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            }); 

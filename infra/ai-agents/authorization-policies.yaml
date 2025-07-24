@@ -1,0 +1,230 @@
+# AI Agent Authorization Policies for Thousands of AI Agents
+# Zero-trust security with fine-grained access control
+
+# Default deny-all policy for ai-agents namespace
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-ai-agents
+  namespace: ai-agents
+spec:
+  # Empty spec means deny all by default
+  {}
+---
+# Allow health checks from kubelet
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-healthchecks-ai-agents
+  namespace: ai-agents
+spec:
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        paths: ["/healthz", "/readyz", "/livez", "/health", "/ready"]
+---
+# AI Agent Orchestrator - Full access to manage all agents
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-orchestrator-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-orchestrator
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/infrastructure/sa/backstage"
+        - "cluster.local/ns/crewai/sa/crewai-app"
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/grpc.AIAgentService/*", "/api/ai-agents/*"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Coding - Access to code repositories and build systems
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-coding-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-coding
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/infrastructure/sa/backstage"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/grpc.AIAgentService/AssignTask", "/grpc.AIAgentService/CompleteTask"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Testing - Access to test environments and results
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-testing-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-testing
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-coding"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/grpc.AIAgentService/AssignTask", "/grpc.AIAgentService/CompleteTask"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Security - Access to security scanning and compliance tools
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-security-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-security
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-coding"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-testing"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/grpc.AIAgentService/AssignTask", "/grpc.AIAgentService/CompleteTask"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Compliance - Access to compliance databases and audit systems
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-compliance-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-compliance
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-security"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/grpc.AIAgentService/AssignTask", "/grpc.AIAgentService/CompleteTask"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Documentation - Access to documentation systems
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-documentation-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-documentation
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-coding"
+        - "cluster.local/ns/ai-agents/sa/ai-agent-testing"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/grpc.AIAgentService/AssignTask", "/grpc.AIAgentService/CompleteTask"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# AI Agent Discovery - Access to service discovery and monitoring
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ai-agent-discovery-policy
+  namespace: ai-agents
+spec:
+  selector:
+    matchLabels:
+      app: ai-agent-discovery
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/ai-agents/sa/ai-agent-orchestrator"
+        - "cluster.local/ns/infrastructure/sa/backstage"
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/grpc.AIAgentService/*", "/api/discovery/*"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"] 

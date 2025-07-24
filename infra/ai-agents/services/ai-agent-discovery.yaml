@@ -1,0 +1,202 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-discovery
+  namespace: ai-agents
+  labels:
+    app: ai-agent-discovery
+    app.kubernetes.io/name: ai-agent-discovery
+    app.kubernetes.io/part-of: medinovai
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-agent-discovery
+  template:
+    metadata:
+      labels:
+        app: ai-agent-discovery
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ai-agent-discovery
+      containers:
+      - name: ai-agent-discovery
+        image: medinovai/ai-agent-discovery:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - name: http-api
+          containerPort: 8080
+          protocol: TCP
+        - name: grpc-api
+          containerPort: 9090
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SERVICE_NAME
+          value: "ai-agent-discovery"
+        - name: AGENT_TYPE
+          value: "discovery"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: METRICS_PORT
+          value: "9091"
+        - name: HEALTH_PORT
+          value: "8081"
+        - name: GRPC_PORT
+          value: "9090"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: DISCOVERY_INTERVAL
+          value: "300"
+        - name: MONITORING_INTERVAL
+          value: "60"
+        - name: ANALYTICS_INTERVAL
+          value: "3600"
+        - name: ENABLE_SERVICE_DISCOVERY
+          value: "true"
+        - name: ENABLE_ENDPOINT_DISCOVERY
+          value: "true"
+        - name: ENABLE_DEPENDENCY_MAPPING
+          value: "true"
+        - name: ENABLE_PERFORMANCE_MONITORING
+          value: "true"
+        - name: ENABLE_HEALTH_MONITORING
+          value: "true"
+        - name: ENABLE_METRICS_COLLECTION
+          value: "true"
+        - name: ENABLE_ANOMALY_DETECTION
+          value: "true"
+        - name: ENABLE_PREDICTIVE_ANALYTICS
+          value: "true"
+        - name: ENABLE_CAPACITY_PLANNING
+          value: "true"
+        - name: ENABLE_OPTIMIZATION_RECOMMENDATIONS
+          value: "true"
+        - name: DISCOVERY_SCOPE
+          value: "cluster,namespace,service,pod"
+        - name: MONITORING_METRICS
+          value: "cpu,memory,network,disk,latency,throughput"
+        - name: ANALYTICS_RETENTION_DAYS
+          value: "90"
+        - name: ENABLE_REAL_TIME_ALERTS
+          value: "true"
+        - name: ENABLE_TREND_ANALYSIS
+          value: "true"
+        - name: ENABLE_BASELINE_CALCULATION
+          value: "true"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: discovery-data
+          mountPath: /tmp/discovery-data
+          readOnly: false
+        - name: analytics-cache
+          mountPath: /tmp/analytics-cache
+          readOnly: false
+        - name: discovery-config
+          mountPath: /etc/discovery/config
+          readOnly: true
+      volumes:
+      - name: discovery-data
+        emptyDir: {}
+      - name: analytics-cache
+        emptyDir: {}
+      - name: discovery-config
+        configMap:
+          name: discovery-agent-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-discovery
+  namespace: ai-agents
+  labels:
+    app: ai-agent-discovery
+    app.kubernetes.io/name: ai-agent-discovery
+    app.kubernetes.io/part-of: medinovai
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9091"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc-api
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  selector:
+    app: ai-agent-discovery
+  sessionAffinity: None 
