@@ -4,6 +4,8 @@
 
 The MedinovAI AI-Only Development Process defines the complete software development lifecycle for teams using modern AI tools like **Cursor**, **Claude Code**, **GitHub Copilot**, and **CrewAI** while maintaining strict compliance with healthcare regulations. This process ensures high-quality, secure, and compliant software delivery through AI-assisted workflows and human oversight.
 
+**⚠️ LICENSE NOTICE**: This software is proprietary and confidential to MedinovAI. Commercial use requires written permission. For licensing inquiries, contact: licensing@medinovai.com
+
 ## 🛠️ AI Tools Integration
 
 ### Core AI Development Stack

@@ -2,7 +2,7 @@
 
 **Production-ready, AI-managed Kubernetes infrastructure for healthcare applications with zero-trust security and autonomous AI agent orchestration.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Commercial](https://img.shields.io/badge/License-Commercial-red.svg)](LICENSE)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-blue.svg)](https://kubernetes.io/)
 [![Istio](https://img.shields.io/badge/Istio-1.19+-purple.svg)](https://istio.io/)
 [![AI Agents](https://img.shields.io/badge/AI%20Agents-50+-green.svg)](https://github.com/joaomdmoura/crewAI)
@@ -397,7 +397,9 @@ make dev-dashboard
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under a **Commercial Software License Agreement** - see the [LICENSE](LICENSE) file for details.
+
+**⚠️ IMPORTANT**: This software is proprietary and confidential to MedinovAI. Commercial use requires written permission. For licensing inquiries, contact: licensing@medinovai.com
 
 ## 🙏 Acknowledgments
 
